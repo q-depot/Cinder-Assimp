@@ -209,7 +209,10 @@ class AssimpLoader
 
 		//! Sets current animation time.
 		void setTime( double t );
-
+    
+        //! Recalculate meshes normals
+        void recalculateNormals();
+        
 	private:
 		void loadAllMeshes();
 		AssimpNodeRef loadNodes( const aiNode* nd, AssimpNodeRef parentRef = AssimpNodeRef() );

@@ -837,6 +837,13 @@ void AssimpLoader::draw()
 	glPopClientAttrib();
 	glPopAttrib();
 }
+    
+void AssimpLoader::recalculateNormals()
+{
+    for( size_t k=0; k < getNumMeshes(); k++ )
+        getMesh(k).recalculateNormals();
+}
+
 
 } } // namespace mndl::assimp
 
