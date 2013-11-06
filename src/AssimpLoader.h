@@ -209,6 +209,9 @@ class AssimpLoader
 
 		//! Sets current animation time.
 		void setTime( double t );
+
+		//! Gets current animation time.
+		double getTime() { return mAnimationTime; }
     
         //! Recalculate meshes normals
         void recalculateNormals();
