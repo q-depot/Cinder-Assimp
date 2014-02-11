@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2011-2012 Gabor Papp
+ Copyright (C) 2011-2013 Gabor Papp
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU Lesser General Public License as published
@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <map>
 #include <vector>
 
 /* 2.0
@@ -30,11 +31,13 @@
 #include "assimp/postprocess.h"
 //*/
 
+#include "cinder/Camera.h"
 #include "cinder/Cinder.h"
 #include "cinder/Color.h"
 #include "cinder/TriMesh.h"
 #include "cinder/Stream.h"
 #include "cinder/AxisAlignedBox.h"
+#include "cinder/gl/Light.h"
 
 #include "Node.h"
 #include "AssimpMesh.h"
@@ -72,6 +75,11 @@ inline aiMatrix4x4 toAssimp( const ci::Matrix44f &m )
 inline aiQuaternion toAssimp( const ci::Quatf &q )
 {
     return aiQuaternion( q.w, q.v.x, q.v.y, q.v.z );
+}
+
+inline ci::Colorf fromAssimp( const aiColor3D &c )
+{
+    return ci::Colorf( c.r, c.g, c.b );
 }
 
 inline ci::ColorAf fromAssimp( const aiColor4D &c )
@@ -119,10 +127,14 @@ class AssimpNode : public mndl::Node
 };
 
 typedef std::shared_ptr< AssimpNode > AssimpNodeRef;
+typedef std::shared_ptr< class AssimpLoader > AssimpLoaderRef;
 
 class AssimpLoader
 {
 	public:
+		//! Create analog for constructor from \a filename.
+		static AssimpLoaderRef create( ci::fs::path filename ) { return AssimpLoaderRef( new AssimpLoader( filename ) ); }
+
 		AssimpLoader() {}
 
 		//! Constructs and does the parsing of the file from \a filename.
@@ -140,6 +152,11 @@ class AssimpLoader
 		void setNodeOrientation( const std::string &name, const ci::Quatf &rot );
 		//! Returns a quaternion representing the orientation of the node called \a name.
 		ci::Quatf getNodeOrientation( const std::string &name );
+
+		//! Returns the root node.
+		AssimpNodeRef getRootNode() { return mRootNode; }
+		//! Returns the root node.
+		const AssimpNodeRef getRootNode() const { return mRootNode; };
 
 		//! Returns the node called \a name.
 		AssimpNodeRef getAssimpNode( const std::string &name );
@@ -216,10 +233,40 @@ class AssimpLoader
         //! Recalculate meshes normals
         void recalculateNormals();
         
+		//! Returns the number of cameras in the scene.
+		size_t getNumCameras() const { return mCameras.size(); }
+
+		//! Returns the \a n'th camera in the model.
+		const ci::CameraPersp &getCamera( size_t n ) const { return mCameras[ n ]; }
+
+		//! Returns the cameras in the model.
+		const std::vector< ci::CameraPersp > & getCameras() const { return mCameras; }
+
+		//! Returns the name of the \a n'th camera in the model.
+		const std::string getCameraName( size_t n ) const;
+
+		//! Returns the number of lights in the scene.
+		size_t getNumLights() const { return mLights.size(); }
+
+		//! Returns the \a n'th light in the model.
+		const ci::gl::Light &getLight( size_t n ) const { return mLights[ n ]; }
+
+		//! Returns the ligths in the model.
+		const std::vector< ci::gl::Light > & getLights() const { return mLights; }
+
+		//! Returns the name of the \a n'th light in the model.
+		const std::string getLightName( size_t n ) const;
+
+		//! Returns the Assimp scene.
+		const aiScene *getAiScene() const { return mScene; }
+
+>>>>>>> upstream/dev
 	private:
 		void loadAllMeshes();
 		AssimpNodeRef loadNodes( const aiNode* nd, AssimpNodeRef parentRef = AssimpNodeRef() );
 		AssimpMeshRef convertAiMesh( const aiMesh *mesh );
+		void loadCameras();
+		void loadLights();
 
 		void calculateDimensions();
 		void calculateBoundingBox( ci::Vec3f *min, ci::Vec3f *max );
@@ -239,6 +286,8 @@ class AssimpLoader
 
 		std::vector< AssimpNodeRef > mMeshNodes; /// nodes with meshes
 		std::vector< AssimpMeshRef > mModelMeshes; /// all meshes
+		std::vector< ci::CameraPersp > mCameras;
+		std::vector< ci::gl::Light > mLights;
 
 		std::vector< std::string > mNodeNames;
 		std::map< std::string, AssimpNodeRef > mNodeMap;

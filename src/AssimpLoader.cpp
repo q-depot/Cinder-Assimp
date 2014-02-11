@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2011-2012 Gabor Papp
+ Copyright (C) 2011-2013 Gabor Papp
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU Lesser General Public License as published
@@ -19,6 +19,8 @@
 */
 
 #include <assert.h>
+
+#include <boost/algorithm/string.hpp>
 
 #include "cinder/app/App.h"
 #include "cinder/ImageIo.h"
@@ -111,8 +113,15 @@ AssimpLoader::AssimpLoader( fs::path filename ) :
 
 	calculateDimensions();
 
+	app::console() << "loading model " << mFilePath.filename().string() <<
+		" [" << mFilePath.string() << "] " << endl;
+
 	loadAllMeshes();
 	mRootNode = loadNodes( mScene->mRootNode );
+	loadCameras();
+	loadLights();
+
+	app::console() << "finished loading model " << mFilePath.filename().string() << endl;
 }
 
 void AssimpLoader::calculateDimensions()
@@ -364,7 +373,20 @@ AssimpMeshRef AssimpLoader::convertAiMesh( const aiMesh *mesh )
 			}
 		}
 
-		assimpMeshRef->mTexture = gl::Texture( loadImage( realPath ), format );
+		string ext = realPath.extension().string();
+		boost::algorithm::to_lower( ext );
+		if ( ext == ".dds" )
+		{
+			// FIXME: loadDds does not seem to work with mipmaps in the latest cinder version
+			// fix based on the work of javi.agenjo, https://github.com/gaborpapp/Cinder/commit/3e7302
+			assimpMeshRef->mTexture = gl::Texture::loadDds( loadFile( realPath )->createStream(), format );
+			if ( !assimpMeshRef->mTexture )
+				app::console() << "failed to laod dds..." << endl;
+		}
+		else
+		{
+			assimpMeshRef->mTexture = gl::Texture( loadImage( realPath ), format );
+		}
 	}
 
 	assimpMeshRef->mAiMesh = mesh;
@@ -392,8 +414,11 @@ AssimpMeshRef AssimpLoader::convertAiMesh( const aiMesh *mesh )
 
 void AssimpLoader::loadAllMeshes()
 {
+<<<<<<< HEAD
 //	app::console() << "loading model " << mFilePath.filename().string() <<
 //		" [" << mFilePath.string() << "] " << endl;
+=======
+>>>>>>> upstream/dev
 	for ( unsigned i = 0; i < mScene->mNumMeshes; ++i )
 	{
 		string name = fromAssimp( mScene->mMeshes[ i ]->mName );
@@ -409,8 +434,84 @@ void AssimpLoader::loadAllMeshes()
 	animationTime = -1;
 	setNormalizedTime(0);
 #endif
+}
 
-	app::console() << "finished loading model " << mFilePath.filename().string() << endl;
+const string AssimpLoader::getCameraName( size_t n ) const
+{
+	return fromAssimp( mScene->mCameras[ n ]->mName );
+}
+
+void AssimpLoader::loadCameras()
+{
+	for ( unsigned i = 0; i < mScene->mNumCameras; ++i )
+	{
+		aiCamera *aiCam = mScene->mCameras[ i ];
+		string cameraName = fromAssimp( aiCam->mName );
+		app::console() << "loading camera " << i;
+		if ( cameraName != "" )
+			app::console() << " [" << cameraName << "]";
+		app::console() << endl;
+		AssimpNodeRef cameraNode = getAssimpNode( cameraName );
+		Quatf nodeOri = cameraNode->getDerivedOrientation();
+		Vec3f nodePos = cameraNode->getDerivedPosition();
+
+		CameraPersp cam;
+		if ( aiCam->mAspect != 0.f )
+			cam.setAspectRatio( aiCam->mAspect );
+		cam.setNearClip( aiCam->mClipPlaneNear );
+		cam.setFarClip( aiCam->mClipPlaneFar );
+		cam.setFovHorizontal( toDegrees( aiCam->mHorizontalFOV ) );
+		cam.setWorldUp( fromAssimp( aiCam->mUp ) * nodeOri );
+		cam.setEyePoint( fromAssimp( aiCam->mPosition ) + nodePos );
+		cam.setViewDirection( fromAssimp( aiCam->mLookAt ) * nodeOri );
+		mCameras.push_back( cam );
+	}
+}
+
+void AssimpLoader::loadLights()
+{
+	for ( unsigned i = 0; i < mScene->mNumLights; ++i )
+	{
+		aiLight *aiLt = mScene->mLights[ i ];
+		string lightName = fromAssimp( aiLt->mName );
+		app::console() << "loading light " << i;
+		if ( lightName != "" )
+			app::console() << " [" << lightName << "]";
+		app::console() << endl;
+
+		gl::Light light( 0, 0 );
+		switch ( aiLt->mType )
+		{
+			case aiLightSource_DIRECTIONAL:
+				light = gl::Light( gl::Light::DIRECTIONAL, i );
+				break;
+			case aiLightSource_POINT:
+				light = gl::Light( gl::Light::POINT, i );
+				break;
+			case aiLightSource_SPOT:
+				light = gl::Light( gl::Light::SPOTLIGHT, i );
+				break;
+			default:
+				continue;
+		}
+		AssimpNodeRef lightNode = getAssimpNode( lightName );
+		Quatf nodeOri = lightNode->getDerivedOrientation();
+		Vec3f nodePos = lightNode->getDerivedPosition();
+
+		light.setAttenuation( aiLt->mAttenuationConstant, aiLt->mAttenuationLinear, aiLt->mAttenuationQuadratic );
+		light.setDirection( fromAssimp( aiLt->mDirection ) * nodeOri );
+		light.setPosition( fromAssimp( aiLt->mPosition ) + nodePos );
+		light.setSpotCutoff( toDegrees( aiLt->mAngleOuterCone ) );
+		light.setAmbient( fromAssimp( aiLt->mColorAmbient ) );
+		light.setDiffuse( fromAssimp( aiLt->mColorDiffuse ) );
+		light.setSpecular( fromAssimp( aiLt->mColorSpecular ) );
+		mLights.push_back( light );
+	}
+}
+
+const string AssimpLoader::getLightName( size_t n ) const
+{
+	return fromAssimp( mScene->mLights[ n ]->mName );
 }
 
 void AssimpLoader::updateAnimation( size_t animationIndex, double currentTime )
@@ -503,8 +604,21 @@ void AssimpLoader::updateAnimation( size_t animationIndex, double currentTime )
 				frame++;
 			}
 
-			// TODO: (thom) interpolation maybe? This time maybe even logarithmic, not linear
-			presentScaling = channel->mScalingKeys[frame].mValue;
+			// interpolate between this frame's value and next frame's value
+			unsigned int nextFrame = (frame + 1) % channel->mNumScalingKeys;
+			const aiVectorKey& key = channel->mScalingKeys[ frame ];
+			const aiVectorKey& nextKey = channel->mScalingKeys[ nextFrame ];
+			double diffTime = nextKey.mTime - key.mTime;
+			if( diffTime < 0.0)
+				diffTime += mAnim->mDuration;
+			if( diffTime > 0)
+			{
+				float factor = float( (currentTime - key.mTime) / diffTime);
+				presentScaling = key.mValue + (nextKey.mValue - key.mValue) * factor;
+			} else
+			{
+				presentScaling = key.mValue;
+			}
 		}
 
 		targetNode->setOrientation( fromAssimp( presentRotation ) );
@@ -798,10 +912,19 @@ void AssimpLoader::draw()
 	{
 		AssimpNodeRef nodeRef = *it;
 
+		if ( !nodeRef->isVisible() )
+			continue;
+
 		vector< AssimpMeshRef >::const_iterator meshIt = nodeRef->mMeshes.begin();
 		for ( ; meshIt != nodeRef->mMeshes.end(); ++meshIt )
 		{
 			AssimpMeshRef assimpMeshRef = *meshIt;
+
+			if ( assimpMeshRef->mAiMesh->mNumBones == 0 )
+			{
+				gl::pushModelView();
+				gl::multModelView( nodeRef->getDerivedTransform() );
+			}
 
 			// Texture Binding
 			if ( mTexturesEnabled && assimpMeshRef->mTexture )
@@ -820,9 +943,9 @@ void AssimpLoader::draw()
 
 			// Culling
 			if ( assimpMeshRef->mTwoSided )
-				gl::enable( GL_CULL_FACE );
-			else
 				gl::disable( GL_CULL_FACE );
+			else
+				gl::enable( GL_CULL_FACE );
 
 			gl::draw( assimpMeshRef->mCachedTriMesh );
 
@@ -831,6 +954,9 @@ void AssimpLoader::draw()
 			{
 				assimpMeshRef->mTexture.unbind();
 			}
+
+			if ( assimpMeshRef->mAiMesh->mNumBones == 0 )
+				gl::popModelView();
 		}
 	}
 

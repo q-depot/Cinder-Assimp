@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2011-2012 Gabor Papp
+ Copyright (C) 2011-2013 Gabor Papp
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU Lesser General Public License as published
@@ -13,6 +13,10 @@
 
  You should have received a copy of the GNU Lesser General Public License
  along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+ Based on the Node system of OGRE (Object-oriented Graphics Rendering Engine)
+ <http://www.ogre3d.org/>
+ Copyright (c) 2000-2013 Torus Knot Software Ltd
 */
 
 #include "Node.h"
@@ -26,7 +30,8 @@ Node::Node() :
 	mScale( Vec3f::one() ),
 	mInheritOrientation( true ),
 	mInheritScale( true ),
-	mNeedsUpdate( true )
+	mNeedsUpdate( true ),
+	mVisible( true )
 {
 }
 
@@ -35,19 +40,20 @@ Node::Node( const std::string &name ) :
 	mScale( Vec3f::one() ),
 	mInheritOrientation( true ),
 	mInheritScale( true ),
-	mNeedsUpdate( true )
+	mNeedsUpdate( true ),
+	mVisible( true )
 {
 }
 
-void Node::setParent( NodeRef parent )
+void Node::setParent( std::weak_ptr< Node > parent )
 {
-	mParent = parent;
+	mParentWeak = parent;
 	requestUpdate();
 }
 
-NodeRef Node::getParent() const
+std::weak_ptr< Node > Node::getParent() const
 {
-	return mParent;
+	return mParentWeak;
 }
 
 void Node::addChild( NodeRef child )
@@ -177,53 +183,86 @@ const Matrix44f &Node::getDerivedTransform() const
 	if ( mNeedsUpdate )
 		update();
 
-    mDerivedTransform = Matrix44f::createScale( mDerivedScale );
-    mDerivedTransform *= mDerivedOrientation.toMatrix44();
-    mDerivedTransform.setTranslate( mDerivedPosition );
+	mDerivedTransform = Matrix44f::createScale( mDerivedScale );
+	mDerivedTransform *= mDerivedOrientation.toMatrix44();
+	mDerivedTransform.setTranslate( mDerivedPosition );
 
-    return mDerivedTransform;
+	return mDerivedTransform;
+}
+
+Quatf Node::convertWorldToLocalOrientation( const Quatf &worldOrientation ) const
+{
+	if ( mNeedsUpdate )
+		update();
+
+	return worldOrientation * mDerivedOrientation.inverse();
+}
+
+Quatf Node::convertLocalToWorldOrientation( const Quatf &localOrientation ) const
+{
+	if ( mNeedsUpdate )
+		update();
+
+	return localOrientation * mDerivedOrientation;
+}
+
+Vec3f Node::convertWorldToLocalPosition( const Vec3f &worldPos ) const
+{
+	if ( mNeedsUpdate )
+		update();
+
+	return ( ( worldPos - mDerivedPosition ) / mDerivedScale ) * mDerivedOrientation.inverse();
+}
+
+Vec3f Node::convertLocalToWorldPosition( const Vec3f &localPos ) const
+{
+	if ( mNeedsUpdate )
+		update();
+
+	return ( ( localPos * mDerivedScale ) * mDerivedOrientation ) + mDerivedPosition;
 }
 
 void Node::update() const
 {
-    if ( mParent )
-    {
-        // update orientation
-        const Quatf &parentOrientation = mParent->getDerivedOrientation();
-        if ( mInheritOrientation )
-        {
-            // Combine orientation with that of parent
-            mDerivedOrientation = getOrientation() * parentOrientation;
-        }
-        else
-        {
-            mDerivedOrientation = getOrientation();
-        }
+	auto parent = mParentWeak.lock();
+	if ( parent )
+	{
+		// update orientation
+		const Quatf &parentOrientation = parent->getDerivedOrientation();
+		if ( mInheritOrientation )
+		{
+			// Combine orientation with that of parent
+			mDerivedOrientation = getOrientation() * parentOrientation;
+		}
+		else
+		{
+			mDerivedOrientation = getOrientation();
+		}
 
-        // update scale
-        const Vec3f &parentScale = mParent->getDerivedScale();
-        if ( mInheritScale )
-        {
-            mDerivedScale = parentScale * getScale();
-        }
-        else
-        {
-            mDerivedScale = getScale();
-        }
+		// update scale
+		const Vec3f &parentScale = parent->getDerivedScale();
+		if ( mInheritScale )
+		{
+			mDerivedScale = parentScale * getScale();
+		}
+		else
+		{
+			mDerivedScale = getScale();
+		}
 
 		// change position vector based on parent's orientation & scale
-        mDerivedPosition = ( parentScale * getPosition() ) * parentOrientation;
+		mDerivedPosition = ( parentScale * getPosition() ) * parentOrientation;
 
-        // add altered position vector to parent's
-        mDerivedPosition += mParent->getDerivedPosition();
-    }
-    else
-    {
-        // root node, no parent
-        mDerivedOrientation = getOrientation();
-        mDerivedPosition = getPosition();
-        mDerivedScale = getScale();
-    }
+		// add altered position vector to parent's
+		mDerivedPosition += parent->getDerivedPosition();
+	}
+	else
+	{
+		// root node, no parent
+		mDerivedOrientation = getOrientation();
+		mDerivedPosition = getPosition();
+		mDerivedScale = getScale();
+	}
 
 	mNeedsUpdate = false;
 }
@@ -237,6 +276,21 @@ void Node::requestUpdate()
 	{
 		(*it)->requestUpdate();
 	}
+}
+
+void Node::show( bool visible )
+{
+	mVisible = visible;
+}
+
+void Node::hide()
+{
+	mVisible = false;
+}
+
+bool Node::isVisible() const
+{
+	return mVisible;
 }
 
 } // namespace mndl
