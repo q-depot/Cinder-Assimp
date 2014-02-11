@@ -414,11 +414,6 @@ AssimpMeshRef AssimpLoader::convertAiMesh( const aiMesh *mesh )
 
 void AssimpLoader::loadAllMeshes()
 {
-<<<<<<< HEAD
-//	app::console() << "loading model " << mFilePath.filename().string() <<
-//		" [" << mFilePath.string() << "] " << endl;
-=======
->>>>>>> upstream/dev
 	for ( unsigned i = 0; i < mScene->mNumMeshes; ++i )
 	{
 		string name = fromAssimp( mScene->mMeshes[ i ]->mName );
