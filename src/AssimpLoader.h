@@ -260,8 +260,9 @@ class AssimpLoader
 		//! Returns the Assimp scene.
 		const aiScene *getAiScene() const { return mScene; }
 
->>>>>>> upstream/dev
+
 	private:
+    
 		void loadAllMeshes();
 		AssimpNodeRef loadNodes( const aiNode* nd, AssimpNodeRef parentRef = AssimpNodeRef() );
 		AssimpMeshRef convertAiMesh( const aiMesh *mesh );
